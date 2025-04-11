@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Exam System</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+  <!-- Login Page -->
+  <div id="loginPage" class="container mt-5">
+    <h2>Student Login</h2>
+    <form>
+      <div class="mb-3">
+        <label for="studentId">Student ID</label>
+        <input type="text" class="form-control" id="studentId">
+      </div>
+      <div class="mb-3">
+        <label for="password">Password</label>
+        <input type="password" class="form-control" id="password">
+      </div>
+      <button type="button" class="btn btn-primary" onclick="login()">Login</button>
+    </form>
+  </div>
+
+  <!-- Student Dashboard -->
+  <div id="studentDashboard" class="container mt-5" style="display:none;">
+    <h2>Welcome, <span id="studentName"></span></h2>
+    <h3>Available Exams</h3>
+    <div class="row">
+      <div class="col"><button class="btn btn-success" onclick="startExam('Word')">Word</button></div>
+      <div class="col"><button class="btn btn-success" onclick="startExam('PowerPoint')">PowerPoint</button></div>
+      <div class="col"><button class="btn btn-success" onclick="startExam('Excel')">Excel</button></div>
+      <div class="col"><button class="btn btn-success" onclick="startExam('ComputerSystem')">Computer System</button></div>
+      <div class="col"><button class="btn btn-success" onclick="startExam('HTMLCSS')">HTML/CSS</button></div>
+    </div>
+    <h3>Your Records</h3>
+    <table class="table">
+      <thead><tr><th>Subject</th><th>Score</th><th>Pass/Fail</th><th>Date</th></tr></thead>
+      <tbody id="recordTable"></tbody>
+    </table>
+  </div>
+
+  <!-- Exam Page -->
+  <div id="examPage" class="container mt-5" style="display:none;">
+    <h2>Exam: <span id="examSubject"></span></h2>
+    <div id="questions"></div>
+    <button class="btn btn-primary" onclick="submitExam()">Submit Exam</button>
+  </div>
+
+  <!-- Admin Dashboard -->
+  <div id="adminDashboard" class="container mt-5" style="display:none;">
+    <h2>Admin Panel</h2>
+    <h3>Create Question</h3>
+    <form id="questionForm">
+      <div class="mb-3">
+        <label for="qSubject">Subject</label>
+        <select class="form-control" id="qSubject">
+          <option>Word</option><option>PowerPoint</option><option>Excel</option><option>ComputerSystem</option><option>HTMLCSS</option>
+        </select>
+      </div>
+      <div class="mb-3">
+        <label for="qText">Question Text</label>
+        <input type="text" class="form-control" id="qText">
+      </div>
+      <div class="mb-3">
+        <label for="qType">Question Type</label>
+        <select class="form-control" id="qType">
+          <option>MCQ</option><option>ShortAnswer</option><option>FileUpload</option>
+        </select>
+      </div>
+      <button type="button" class="btn btn-primary" onclick="createQuestion()">Create</button>
+    </form>
+    <h3>Student Records</h3>
+    <table class="table">
+      <thead><tr><th>Student ID</th><th>Subject</th><th>Score</th><th>Pass/Fail</th><th>Download Submission</th></tr></thead>
+      <tbody id="adminRecordTable"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const apiUrl = "YOUR_APPS_SCRIPT_WEB_APP_URL";
+    let currentStudentId = "";
+
+    function login() {
+      const studentId = document.getElementById("studentId").value;
+      const password = document.getElementById("password").value;
+      fetch(apiUrl, {
+        method: "POST",
+        body: JSON.stringify({ action: "login", studentId, password })
+      })
+      .then(response => response.text())
+      .then(data => {
+        if (data === "Success") {
+          currentStudentId = studentId;
+          document.getElementById("loginPage").style.display = "none";
+          document.getElementById("studentDashboard").style.display = "block";
+          loadRecords();
+        } else {
+          alert("Invalid Credentials");
+        }
+      });
+    }
+
+    function startExam(subject) {
+      document.getElementById("studentDashboard").style.display = "none";
+      document.getElementById("examPage").style.display = "block";
+      document.getElementById("examSubject").innerText = subject;
+      fetch(`${apiUrl}?action=questions&subject=${subject}`)
+        .then(response => response.json())
+        .then(data => {
+          const questionsDiv = document.getElementById("questions");
+          questionsDiv.innerHTML = data.map(q => `
+            <div class="mb-3">
+              <p>${q[2]}</p>
+              ${q[5] === "MCQ" ? q[3].split(",").map(opt => `<input type="radio" name="${q[0]}" value="${opt}">${opt}<br>`).join("") : 
+                q[5] === "ShortAnswer" ? `<input type="text" class="form-control" id="${q[0]}">` : 
+                `<input type="file" id="${q[0]}">`}
+            </div>
+          `).join("");
+        });
+    }
+
+    function submitExam() {
+      const answers = [];
+      document.querySelectorAll("#questions input").forEach(input => {
+        answers.push({
+          questionId: input.id || input.name,
+          answer: input.value || input.files[0]?.name
+        });
+      });
+      fetch(apiUrl, {
+        method: "POST",
+        body: JSON.stringify({ action: "submitExam", studentId: currentStudentId, subject: document.getElementById("examSubject").innerText, answers })
+      })
+      .then(response => response.json())
+      .then(data => {
+        alert(`Score: ${data.score}, ${data.passFail}`);
+        document.getElementById("examPage").style.display = "none";
+        document.getElementById("studentDashboard").style.display = "block";
+        loadRecords();
+      });
+    }
+
+    function loadRecords() {
+      fetch(`${apiUrl}?action=records&studentId=${currentStudentId}`)
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById("recordTable").innerHTML = data.map(row => `
+            <tr><td>${row[2]}</td><td>${row[4]}</td><td>${row[5]}</td><td>${row[6]}</td></tr>
+          `).join("");
+        });
+    }
+
+    function createQuestion() {
+      const subject = document.getElementById("qSubject").value;
+      const questionText = document.getElementById("qText").value;
+      const questionType = document.getElementById("qType").value;
+      fetch(apiUrl, {
+        method: "POST",
+        body: JSON.stringify({ action: "admin/questions", subject, questionText, questionType })
+      })
+      .then(() => alert("Question Created"));
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
